@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-[#21252b] text-[#c8c8c8] font-sans h-screen w-screen m-0 p-0 overflow-hidden;
+  }
+}
