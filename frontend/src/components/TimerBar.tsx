@@ -6,7 +6,7 @@ import { useTimeTracker } from '../context/TimeTrackerContext'
 import type { FtrackNode } from '../context/TimeTrackerContext'
 
 export default function TimerBar() {
-    const { activeTimerId, stopTimer, logs, updateLog, projects } = useTimeTracker()
+    const { activeTimerId, stopTimer, logs, updateLog, projects, globalCurrency, setGlobalCurrency, settings } = useTimeTracker()
     const activeEntry = logs.find(l => l.id === activeTimerId)
 
     const [isRunning, setIsRunning] = useState(false)
@@ -180,6 +180,17 @@ export default function TimerBar() {
             {/* Right side: Toggles & Start Button */}
             <div className="flex items-center gap-6">
                 <div className="flex items-center gap-3 pr-4">
+                    <select
+                        value={globalCurrency}
+                        onChange={(e) => setGlobalCurrency(e.target.value)}
+                        className="bg-[#1e2227] border border-[#3a3f4b] text-[#abb2bf] text-sm rounded px-2 py-1 outline-none focus:border-[#61afef] transition-colors cursor-pointer mr-2"
+                        title="Display Currency"
+                    >
+                        {settings.currency.bookmarks.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+
                     <button
                         className={clsx(
                             "transition-colors",

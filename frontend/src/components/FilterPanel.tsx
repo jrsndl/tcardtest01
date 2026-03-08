@@ -34,7 +34,7 @@ const initialModifiers: FilterModifierState = {
 const initialFilters: FilterState = {
     timeFilter: 'today',
     projects: ['all-active'],
-    persons: ['me'],
+    persons: ['all'],
     taskTypes: [],
     taskName: '',
     statusesInclude: [],
@@ -45,11 +45,13 @@ const initialFilters: FilterState = {
 export default function FilterPanel({
     onFilterChange,
     isPinned,
-    onTogglePin
+    onTogglePin,
+    showPersonFilter = false
 }: {
     onFilterChange: (filters: FilterState) => void
     isPinned: boolean
     onTogglePin: () => void
+    showPersonFilter?: boolean
 }) {
     const [isOpen, setIsOpen] = useState(false)
     const [filters, setFilters] = useState<FilterState>(initialFilters)
@@ -163,22 +165,24 @@ export default function FilterPanel({
                 </div>
 
                 {/* Persons Filter */}
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Person</label>
-                        <ModifierIcons category="persons" />
+                {showPersonFilter && (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Person</label>
+                            <ModifierIcons category="persons" />
+                        </div>
+                        <select
+                            value={filters.persons[0] || 'all'}
+                            onChange={e => handleUpdate({ persons: [e.target.value] })}
+                            className="w-full bg-[#1e2227] border border-[#3a3f4b] text-[#abb2bf] text-sm rounded px-3 py-2 outline-none focus:border-[#61afef]"
+                        >
+                            <option value="me">Assigned to Me</option>
+                            <option value="all">Everyone</option>
+                            <option value="artist1">Artist One</option>
+                            <option value="artist2">Artist Two</option>
+                        </select>
                     </div>
-                    <select
-                        value={filters.persons[0] || 'all'}
-                        onChange={e => handleUpdate({ persons: [e.target.value] })}
-                        className="w-full bg-[#1e2227] border border-[#3a3f4b] text-[#abb2bf] text-sm rounded px-3 py-2 outline-none focus:border-[#61afef]"
-                    >
-                        <option value="me">Assigned to Me</option>
-                        <option value="all">Everyone</option>
-                        <option value="artist1">Artist One</option>
-                        <option value="artist2">Artist Two</option>
-                    </select>
-                </div>
+                )}
 
                 {/* Task Name Search */}
                 <div className="space-y-2">

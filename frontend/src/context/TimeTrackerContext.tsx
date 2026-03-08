@@ -2,10 +2,92 @@ import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { addDays, subDays, addSeconds, format } from 'date-fns';
 
-export interface Project {
+export interface InvoicingMilestone {
+    date: string;
+    price: number;
+    due_date: string;
+}
+
+export interface AccessRole {
     id: string;
     name: string;
+    seeUnassignedTasks: boolean;
+    logToUnassignedTasks: boolean;
+    logToProjectWithoutTask: boolean;
+    logToProjectWithoutPath: boolean;
+    seeDeptPrices: boolean;
+    seeUnitPrices: boolean;
+    seeDeptLogs: boolean;
+    seeUnitLogs: boolean;
+    seeDeptRates: boolean;
+    seeUnitRates: boolean;
+    changeDeptRates: boolean;
+    changeUnitRates: boolean;
+}
+
+export interface Department {
+    id: string;
+    name: string;
+}
+
+export interface Unit {
+    id: string;
+    name: string;
+    country: string;
+    currency: string;
+    location: string;
+    address: string;
+}
+
+export interface User {
+    id: string;
+    username: string;
+    password?: string;
+    fullName: string;
+    email: string;
+    isActive: boolean;
+    roleId: string;
+    departmentIds: string[];
+    unitId: string;
+    currencyOverrideEnabled: boolean;
+    preferredCurrency: string;
+}
+
+export interface AppSettings {
+    currency: {
+        preferred: string;
+        bookmarks: string[];
+    };
+    loggingLimits: {
+        autoSubmitAfter: { days: number, hours: number };
+        submitLocksTimeLog: boolean;
+        allowAddingPast: { days: number, hours: number };
+        allowAddingFuture: { days: number, hours: number };
+        allowEditingDisputed: boolean;
+    };
+    defaultWorkStartTime: string;
+}
+
+export interface Project {
+    // Synced from Ftrack
+    id: string; // ftrack_id equivalent
+    name: string;
+    short_name: string;
+    start_date: string;
+    end_date: string;
     color: string;
+    assigned_users: string[]; // From "organize team"
+
+    // User Fillable Custom Fields
+    currency: string;
+    bid_price: number;
+    client_invoice: string;
+    contacts: string;
+    notes: string;
+    departments: string[];
+    project_group: string[];
+    invoicing_plan: InvoicingMilestone[];
+    milestones: string[];
 }
 
 export interface TimeLog {
@@ -50,12 +132,100 @@ interface TimeTrackerContextType {
     setGlobalSelectedEntryIds: (ids: string[]) => void;
     favoriteTasks: string[];
     toggleFavoriteTask: (taskKey: string) => void;
+    updateProject: (id: string, updates: Partial<Project>) => void;
+    globalCurrency: string;
+    setGlobalCurrency: (currency: string) => void;
+    formatCurrency: (amount: number, nativeCurrency?: string) => string;
+    settings: AppSettings;
+    updateSettings: (updates: Partial<AppSettings>) => void;
+
+    users: User[];
+    updateUser: (id: string, updates: Partial<User>) => void;
+
+    units: Unit[];
+    updateUnit: (id: string, updates: Partial<Unit>) => void;
+
+    departments: Department[];
+    addDepartment: (name: string) => void;
+    removeDepartment: (id: string) => void;
+
+    roles: AccessRole[];
+    updateRole: (id: string, updates: Partial<AccessRole>) => void;
 }
 
+const initialSettings: AppSettings = {
+    currency: {
+        preferred: 'EUR',
+        bookmarks: ['USD', 'EUR', 'GBP', 'CZK']
+    },
+    loggingLimits: {
+        autoSubmitAfter: { days: 1, hours: 12 },
+        submitLocksTimeLog: true,
+        allowAddingPast: { days: 1, hours: 16 },
+        allowAddingFuture: { days: 0, hours: 0 },
+        allowEditingDisputed: true
+    },
+    defaultWorkStartTime: '09:00'
+};
+
+// Mock Exchange Rates to USD base for now
+const exchangeRates: Record<string, number> = {
+    USD: 1,
+    EUR: 0.92,
+    GBP: 0.79,
+    CZK: 23.40
+};
+
+const initialRoles: AccessRole[] = [
+    {
+        id: 'r1', name: 'admin', seeUnassignedTasks: true, logToUnassignedTasks: true, logToProjectWithoutTask: true, logToProjectWithoutPath: true,
+        seeDeptPrices: true, seeUnitPrices: true, seeDeptLogs: true, seeUnitLogs: true, seeDeptRates: true, seeUnitRates: true, changeDeptRates: true, changeUnitRates: true
+    },
+    {
+        id: 'r2', name: 'artist', seeUnassignedTasks: false, logToUnassignedTasks: false, logToProjectWithoutTask: false, logToProjectWithoutPath: false,
+        seeDeptPrices: false, seeUnitPrices: false, seeDeptLogs: true, seeUnitLogs: false, seeDeptRates: false, seeUnitRates: false, changeDeptRates: false, changeUnitRates: false
+    }
+];
+
+const initialDepartments: Department[] = [
+    { id: 'd1', name: 'io' }, { id: 'd2', name: 'producers' }, { id: 'd3', name: 'coordinators' },
+    { id: 'd4', name: 'supervisors' }, { id: 'd5', name: 'leads' }, { id: 'd6', name: 'artists' },
+    { id: 'd7', name: 'compositors' }, { id: 'd8', name: 'editors' }, { id: 'd9', name: 'colorists' },
+    { id: 'd10', name: 'finishing' }, { id: 'd11', name: 'finance' }
+];
+
+const initialUnits: Unit[] = [
+    { id: 'u1', name: 'Commercial Unit', country: 'US', currency: 'USD', location: 'New York', address: '123 Ad Space Ave' },
+    { id: 'u2', name: 'Film Unit', country: 'UK', currency: 'GBP', location: 'London', address: '45 Cinema Road' }
+];
+
+const initialUsers: User[] = [
+    { id: 'jirka', username: 'jirka', fullName: 'Jirka', email: 'jirka@studio.com', isActive: true, roleId: 'r1', departmentIds: ['d4', 'd5'], unitId: 'u1', currencyOverrideEnabled: false, preferredCurrency: 'USD' },
+    { id: 'john.doe', username: 'john.doe', password: 'topsecret', fullName: 'John Doe', email: 'john.doe@gmail.com', isActive: true, roleId: 'r2', departmentIds: ['d6'], unitId: 'u2', currencyOverrideEnabled: true, preferredCurrency: 'EUR' }
+];
+
 const initialProjects: Project[] = [
-    { id: 'Prj-Ayon', name: 'Ayon Cloud Integration', color: '#98c379' },
-    { id: 'Prj-Commercial', name: 'Nike Commercial', color: '#61afef' },
-    { id: 'Prj-Internal', name: 'Internal Dev & RnD', color: '#e5c07b' }
+    {
+        id: 'Prj-Ayon', name: 'Ayon Cloud Integration', short_name: 'AYN', color: '#98c379',
+        start_date: '2023-10-01', end_date: '2024-06-30', assigned_users: ['jirka', 'artist1'],
+        currency: 'USD', bid_price: 50000, client_invoice: 'Ayon Studios', contacts: 'john@ayon.com',
+        notes: 'Priority integration task.', departments: ['Dev', 'IT'], project_group: ['Internal Pipeline'],
+        invoicing_plan: [{ date: '2023-12-01', price: 15000, due_date: '2023-12-15' }], milestones: ['Alpha Release']
+    },
+    {
+        id: 'Prj-Commercial', name: 'Nike Commercial', short_name: 'NKE', color: '#61afef',
+        start_date: '2024-01-15', end_date: '2024-03-01', assigned_users: ['jirka', 'artist2'],
+        currency: 'EUR', bid_price: 120000, client_invoice: 'Nike Europe', contacts: 'marketing@nike.com',
+        notes: 'Fast paced delivery.', departments: ['3D', 'Comp'], project_group: ['Commercials'],
+        invoicing_plan: [], milestones: ['Animatic approval', 'Final delivery']
+    },
+    {
+        id: 'Prj-Internal', name: 'Internal Dev & RnD', short_name: 'RND', color: '#e5c07b',
+        start_date: '2024-01-01', end_date: '2024-12-31', assigned_users: ['jirka'],
+        currency: 'USD', bid_price: 0, client_invoice: 'Internal', contacts: '',
+        notes: 'Ongoing RnD tasks.', departments: ['R&D'], project_group: ['Internal'],
+        invoicing_plan: [], milestones: []
+    }
 ];
 
 const today = new Date();
@@ -211,10 +381,41 @@ const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(und
 
 export function TimeTrackerProvider({ children }: { children: ReactNode }) {
     const [logs, setLogs] = useState<TimeLog[]>(initialLogs);
-    const [projects] = useState<Project[]>(initialProjects);
+    const [projects, setProjects] = useState<Project[]>(initialProjects);
+    const [settings, setSettings] = useState<AppSettings>(initialSettings);
     const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
     const [globalSelectedEntryIds, setGlobalSelectedEntryIds] = useState<string[]>([]);
     const [favoriteTasks, setFavoriteTasks] = useState<string[]>([]);
+    const [globalCurrency, setGlobalCurrency] = useState<string>(initialSettings.currency.preferred);
+
+    const [users, setUsers] = useState<User[]>(initialUsers);
+    const [units, setUnits] = useState<Unit[]>(initialUnits);
+    const [departments, setDepartments] = useState<Department[]>(initialDepartments);
+    const [roles, setRoles] = useState<AccessRole[]>(initialRoles);
+
+    const updateSettings = (updates: Partial<AppSettings>) => {
+        setSettings(prev => ({ ...prev, ...updates }));
+    };
+
+    const updateUser = (id: string, updates: Partial<User>) => setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+    const updateUnit = (id: string, updates: Partial<Unit>) => setUnits(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+    const updateRole = (id: string, updates: Partial<AccessRole>) => setRoles(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    const addDepartment = (name: string) => setDepartments(prev => [...prev, { id: Date.now().toString(), name }]);
+    const removeDepartment = (id: string) => setDepartments(prev => prev.filter(d => d.id !== id));
+
+    const formatCurrency = (amount: number, nativeCurrency: string = 'USD') => {
+        // Fallback safely if rate is missing
+        const fromRate = exchangeRates[nativeCurrency] || 1;
+        const toRate = exchangeRates[globalCurrency] || 1;
+
+        const convertedScore = (amount / fromRate) * toRate;
+
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: globalCurrency,
+            maximumFractionDigits: 0
+        }).format(convertedScore);
+    };
 
     const toggleFavoriteTask = (taskKey: string) => {
         setFavoriteTasks(prev =>
@@ -237,6 +438,10 @@ export function TimeTrackerProvider({ children }: { children: ReactNode }) {
             }));
         }
         setActiveTimerId(null);
+    };
+
+    const updateProject = (id: string, updates: Partial<Project>) => {
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     };
 
     const addLog = (log: Omit<TimeLog, 'id'>) => {
@@ -276,7 +481,10 @@ export function TimeTrackerProvider({ children }: { children: ReactNode }) {
         <TimeTrackerContext.Provider value={{
             projects, logs, hierarchy: mockHierarchy, activeTimerId, startTimer, stopTimer, addLog, updateLog, deleteLog, mergeLogs,
             globalSelectedEntryIds, setGlobalSelectedEntryIds,
-            favoriteTasks, toggleFavoriteTask
+            favoriteTasks, toggleFavoriteTask, updateProject,
+            globalCurrency, setGlobalCurrency, formatCurrency,
+            settings, updateSettings,
+            users, updateUser, units, updateUnit, departments, addDepartment, removeDepartment, roles, updateRole
         }}>
             {children}
         </TimeTrackerContext.Provider>

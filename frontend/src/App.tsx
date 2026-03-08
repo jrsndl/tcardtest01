@@ -5,7 +5,7 @@ import TimerBar from './components/TimerBar'
 import Tracker from './views/Tracker'
 import Timesheet from './views/Timesheet'
 import CalendarView from './views/CalendarView'
-import { Projects, Team, Reports, Tags, Settings } from './views/AuxiliaryViews'
+import { Projects, Team, Reports, Settings } from './views/AuxiliaryViews'
 import { TimeTrackerProvider } from './context/TimeTrackerContext'
 
 function App() {
@@ -28,7 +28,7 @@ function App() {
               <Route path="/projects" element={<Projects />} />
               <Route path="/team" element={<Team />} />
               <Route path="/reports" element={<Reports />} />
-              <Route path="/tags" element={<Tags />} />
+              <Route path="/tags" element={<Navigate to="/" replace />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </main>

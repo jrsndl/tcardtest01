@@ -238,20 +238,7 @@ export default function Timesheet() {
                     </div>
 
                     {/* Additional Pickers & Quick Dates */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <select className="bg-[#282c33] border border-[#3a3f4b] text-[#abb2bf] text-sm rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#61afef]">
-                                <option>All Projects, Paths and Tasks</option>
-                                <option>Prj-Ayon</option>
-                                <option>Prj-Commercial</option>
-                            </select>
-                            <select className="bg-[#282c33] border border-[#3a3f4b] text-[#abb2bf] text-sm rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#61afef] w-48">
-                                <option>Me (jirka)</option>
-                                <option>All Persons</option>
-                                <option>Artist 1</option>
-                                <option>Artist 2</option>
-                            </select>
-                        </div>
+                    <div className="flex items-center justify-end">
 
                         <div className="flex items-center gap-1 text-sm bg-[#1e2227] border border-[#3a3f4b] rounded p-1">
                             {['Today', 'Yesterday', 'This Week', 'Last Week', 'This Month', 'Last Month'].map((range, i) => (

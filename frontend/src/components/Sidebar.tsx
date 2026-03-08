@@ -6,7 +6,6 @@ import {
     Briefcase,
     Users,
     BarChart2,
-    Tag,
     Settings,
     ChevronLeft,
     ChevronRight
@@ -25,7 +24,6 @@ const navItems = [
     { path: '/projects', icon: Briefcase, label: 'Projects' },
     { path: '/team', icon: Users, label: 'Team' },
     { path: '/reports', icon: BarChart2, label: 'Reports' },
-    { path: '/tags', icon: Tag, label: 'Tags' },
 ]
 
 export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
@@ -41,10 +39,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                 {/* Logo / Header */}
                 <div className="h-16 flex items-center px-4 border-b border-[#3a3f4b]">
                     <div className="flex items-center gap-3 w-full">
-                        <div className="w-8 h-8 rounded shrink-0 bg-blue-500 flex items-center justify-center text-white font-bold">
-                            F
-                        </div>
-                        {isOpen && <span className="text-white font-semibold truncate">Ftrack Time</span>}
+                        {isOpen && <span className="text-white font-light text-xl tracking-wider truncate">Sand2Gold</span>}
                     </div>
                 </div>
 
