@@ -1,6 +1,15 @@
 import { useState } from 'react'
-import { Filter, X, Search, Pin, PinOff } from 'lucide-react'
+import { Filter, X, Search, Pin, PinOff, Pause, CircleOff } from 'lucide-react'
 import { clsx } from 'clsx'
+
+interface FilterModifierState {
+    time: { paused: boolean, not: boolean }
+    projects: { paused: boolean, not: boolean }
+    persons: { paused: boolean, not: boolean }
+    taskName: { paused: boolean, not: boolean }
+    taskTypes: { paused: boolean, not: boolean }
+    statuses: { paused: boolean, not: boolean }
+}
 
 interface FilterState {
     timeFilter: string
@@ -10,6 +19,16 @@ interface FilterState {
     taskName: string
     statusesInclude: string[]
     statusesExclude: string[]
+    modifiers: FilterModifierState
+}
+
+const initialModifiers: FilterModifierState = {
+    time: { paused: false, not: false },
+    projects: { paused: false, not: false },
+    persons: { paused: false, not: false },
+    taskName: { paused: false, not: false },
+    taskTypes: { paused: false, not: false },
+    statuses: { paused: false, not: false }
 }
 
 const initialFilters: FilterState = {
@@ -19,7 +38,8 @@ const initialFilters: FilterState = {
     taskTypes: [],
     taskName: '',
     statusesInclude: [],
-    statusesExclude: []
+    statusesExclude: [],
+    modifiers: initialModifiers
 }
 
 export default function FilterPanel({
@@ -40,12 +60,40 @@ export default function FilterPanel({
         onFilterChange(newFilters)
     }
 
+    const toggleModifier = (category: keyof FilterModifierState, type: 'paused' | 'not') => {
+        const newMods = {
+            ...filters.modifiers,
+            [category]: { ...filters.modifiers[category], [type]: !filters.modifiers[category][type] }
+        }
+        handleUpdate({ modifiers: newMods })
+    }
+
+    const ModifierIcons = ({ category }: { category: keyof FilterModifierState }) => (
+        <div className="flex items-center gap-1.5 ml-auto">
+            <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleModifier(category, 'paused'); }}
+                className={clsx("p-0.5 rounded transition-colors", filters.modifiers[category].paused ? "text-yellow-500 bg-yellow-500/10" : "text-[#5c6370] hover:text-[#abb2bf] hover:bg-[#3a3f4b]")}
+                title="Pause this filter"
+            >
+                <Pause size={12} className={clsx(filters.modifiers[category].paused && "fill-current")} />
+            </button>
+            <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleModifier(category, 'not'); }}
+                className={clsx("p-0.5 rounded transition-colors", filters.modifiers[category].not ? "text-red-400 bg-red-400/10" : "text-[#5c6370] hover:text-[#abb2bf] hover:bg-[#3a3f4b]")}
+                title="Invert this filter (NOT)"
+            >
+                <CircleOff size={12} />
+            </button>
+        </div>
+    )
+
     const clearAll = () => {
-        const cleared = {
+        const cleared: FilterState = {
             ...initialFilters,
             timeFilter: 'all',
             projects: ['all'],
-            persons: ['all']
+            persons: ['all'],
+            modifiers: initialModifiers
         }
         setFilters(cleared)
         onFilterChange(cleared)
@@ -77,7 +125,10 @@ export default function FilterPanel({
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 {/* Time Filter */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Time</label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Time</label>
+                        <ModifierIcons category="time" />
+                    </div>
                     <select
                         value={filters.timeFilter}
                         onChange={e => handleUpdate({ timeFilter: e.target.value })}
@@ -95,7 +146,10 @@ export default function FilterPanel({
 
                 {/* Projects Filter */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Projects</label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Projects</label>
+                        <ModifierIcons category="projects" />
+                    </div>
                     <select
                         value={filters.projects[0] || 'all'}
                         onChange={e => handleUpdate({ projects: [e.target.value] })}
@@ -110,7 +164,10 @@ export default function FilterPanel({
 
                 {/* Persons Filter */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Person</label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Person</label>
+                        <ModifierIcons category="persons" />
+                    </div>
                     <select
                         value={filters.persons[0] || 'all'}
                         onChange={e => handleUpdate({ persons: [e.target.value] })}
@@ -125,7 +182,10 @@ export default function FilterPanel({
 
                 {/* Task Name Search */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Task Name</label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Task Name</label>
+                        <ModifierIcons category="taskName" />
+                    </div>
                     <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5c6370]" />
                         <input
@@ -140,7 +200,10 @@ export default function FilterPanel({
 
                 {/* Task Types (Multi-select) */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Task Types</label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Task Types</label>
+                        <ModifierIcons category="taskTypes" />
+                    </div>
                     <div className="flex flex-wrap gap-1.5 p-2 bg-[#1e2227] border border-[#3a3f4b] rounded">
                         {['Comp', 'Anim', 'Light', 'Model', 'Rig', 'VFX', 'Prep'].map(type => {
                             const isSelected = filters.taskTypes.includes(type)
@@ -170,7 +233,10 @@ export default function FilterPanel({
 
                 {/* Task Status Include/Exclude Mock */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Statuses</label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#5c6370] uppercase tracking-wider">Statuses</label>
+                        <ModifierIcons category="statuses" />
+                    </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                         {['logged', 'submitted', 'approved', 'disputed'].map(status => {
                             const isInc = filters.statusesInclude.includes(status)

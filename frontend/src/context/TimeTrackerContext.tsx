@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
-import { addDays, subDays } from 'date-fns';
+import { addDays, subDays, addSeconds, format } from 'date-fns';
 
 export interface Project {
     id: string;
@@ -26,13 +26,30 @@ export interface TimeLog {
     date: Date;
 }
 
+export interface FtrackNode {
+    id: string;
+    name: string;
+    type: 'project' | 'folder' | 'sequence' | 'shot' | 'task';
+    task_type?: string; // e.g. 'Anim', 'Comp', 'Light' (only for tasks)
+    thumbnail_url?: string;
+    children?: FtrackNode[];
+}
+
 interface TimeTrackerContextType {
     projects: Project[];
     logs: TimeLog[];
+    hierarchy: FtrackNode[];
+    activeTimerId: string | null;
+    startTimer: (entryId: string) => void;
+    stopTimer: () => void;
     addLog: (log: Omit<TimeLog, 'id'>) => void;
     updateLog: (id: string, log: Partial<TimeLog>) => void;
     deleteLog: (id: string) => void;
     mergeLogs: (ids: string[]) => void;
+    globalSelectedEntryIds: string[];
+    setGlobalSelectedEntryIds: (ids: string[]) => void;
+    favoriteTasks: string[];
+    toggleFavoriteTask: (taskKey: string) => void;
 }
 
 const initialProjects: Project[] = [
@@ -108,11 +125,119 @@ const initialLogs: TimeLog[] = [
     }
 ];
 
+const mockHierarchy: FtrackNode[] = [
+    {
+        id: 'Prj-Ayon',
+        name: 'Ayon Cloud Integration',
+        type: 'project',
+        children: [
+            {
+                id: 'f1',
+                name: 'assets',
+                type: 'folder',
+                children: [
+                    {
+                        id: 'a1',
+                        name: 'chr_hero',
+                        type: 'shot', // Treating as asset leaf
+                        children: [
+                            { id: 't1', name: 'anim', type: 'task', task_type: 'Anim', thumbnail_url: 'https://picsum.photos/seed/ayon1/100/100' },
+                            { id: 't2', name: 'model', type: 'task', task_type: 'Model', thumbnail_url: 'https://picsum.photos/seed/ayon1_model/100/100' }
+                        ]
+                    },
+                    {
+                        id: 'a2',
+                        name: 'dev',
+                        type: 'folder',
+                        children: [
+                            { id: 't3', name: 'rnd', type: 'task', task_type: 'Dev', thumbnail_url: 'https://picsum.photos/seed/ayon_dev/100/100' }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: 'f2',
+                name: 'shots',
+                type: 'folder',
+                children: [
+                    {
+                        id: 's1',
+                        name: 'sh010',
+                        type: 'shot',
+                        children: [
+                            { id: 't4', name: 'layout', type: 'task', task_type: 'Layout', thumbnail_url: 'https://picsum.photos/seed/ayon_sh010_layout/100/100' },
+                            { id: 't5', name: 'anim', type: 'task', task_type: 'Anim', thumbnail_url: 'https://picsum.photos/seed/ayon_sh010_anim/100/100' }
+                        ]
+                    },
+                    {
+                        id: 's2',
+                        name: 'sh020',
+                        type: 'shot',
+                        children: [
+                            { id: 't6', name: 'comp', type: 'task', task_type: 'Comp', thumbnail_url: 'https://picsum.photos/seed/ayon2/100/100' },
+                            { id: 't7', name: 'lighting', type: 'task', task_type: 'Light', thumbnail_url: 'https://picsum.photos/seed/ayon_sh020_light/100/100' }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'Prj-Commercial',
+        name: 'Nike Commercial',
+        type: 'project',
+        children: [
+            {
+                id: 'c_shots',
+                name: 'shots',
+                type: 'folder',
+                children: [
+                    {
+                        id: 'c_sh010',
+                        name: 'sh010',
+                        type: 'shot',
+                        children: [
+                            { id: 't8', name: 'lighting', type: 'task', task_type: 'Light', thumbnail_url: 'https://picsum.photos/seed/ayon2/100/100' },
+                            { id: 't9', name: 'comp', type: 'task', task_type: 'Comp', thumbnail_url: 'https://picsum.photos/seed/c_sh010_comp/100/100' }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+];
+
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
 
 export function TimeTrackerProvider({ children }: { children: ReactNode }) {
     const [logs, setLogs] = useState<TimeLog[]>(initialLogs);
     const [projects] = useState<Project[]>(initialProjects);
+    const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
+    const [globalSelectedEntryIds, setGlobalSelectedEntryIds] = useState<string[]>([]);
+    const [favoriteTasks, setFavoriteTasks] = useState<string[]>([]);
+
+    const toggleFavoriteTask = (taskKey: string) => {
+        setFavoriteTasks(prev =>
+            prev.includes(taskKey) ? prev.filter(k => k !== taskKey) : [...prev, taskKey]
+        );
+    };
+
+    const startTimer = (id: string) => setActiveTimerId(id);
+    const stopTimer = () => {
+        if (activeTimerId) {
+            setLogs(prev => prev.map(log => {
+                if (log.id === activeTimerId && log.start_time) {
+                    const [hours, minutes] = log.start_time.split(':').map(Number);
+                    const startDate = new Date();
+                    startDate.setHours(hours, minutes, 0, 0);
+                    const endDate = addSeconds(startDate, log.duration);
+                    return { ...log, end_time: format(endDate, 'HH:mm') };
+                }
+                return log;
+            }));
+        }
+        setActiveTimerId(null);
+    };
 
     const addLog = (log: Omit<TimeLog, 'id'>) => {
         setLogs(prev => [...prev, { ...log, id: Date.now().toString() }]);
@@ -148,7 +273,11 @@ export function TimeTrackerProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <TimeTrackerContext.Provider value={{ projects, logs, addLog, updateLog, deleteLog, mergeLogs }}>
+        <TimeTrackerContext.Provider value={{
+            projects, logs, hierarchy: mockHierarchy, activeTimerId, startTimer, stopTimer, addLog, updateLog, deleteLog, mergeLogs,
+            globalSelectedEntryIds, setGlobalSelectedEntryIds,
+            favoriteTasks, toggleFavoriteTask
+        }}>
             {children}
         </TimeTrackerContext.Provider>
     );

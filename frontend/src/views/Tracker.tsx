@@ -1,16 +1,28 @@
-import { useState } from 'react'
-import { Play, Copy, Trash2, Plus } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Play, Square, Copy, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format, isSameDay } from 'date-fns'
 import FilterPanel from '../components/FilterPanel'
+import PathPicker from '../components/PathPicker'
 import { useTimeTracker } from '../context/TimeTrackerContext'
+import type { FtrackNode } from '../context/TimeTrackerContext'
 
 export default function Tracker() {
-    const { logs, mergeLogs, deleteLog } = useTimeTracker()
+    const { logs, activeTimerId, startTimer, stopTimer, updateLog, mergeLogs, deleteLog, addLog, projects, globalSelectedEntryIds: selectedEntryIds, setGlobalSelectedEntryIds: setSelectedEntryIds } = useTimeTracker()
     const [isFilterPinned, setIsFilterPinned] = useState(true)
-    const [viewMode, setViewMode] = useState<'simple' | 'calendar'>('simple')
-    const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([])
-    const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
+    const [editingPathId, setEditingPathId] = useState<string | null>(null)
+    const pickerRef = useRef<HTMLDivElement>(null)
+
+    // Handle outside click to close picker
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (editingPathId && pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+                setEditingPathId(null)
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [editingPathId]);
 
     const formatDuration = (seconds: number) => {
         const hrs = Math.floor(seconds / 3600)
@@ -22,54 +34,24 @@ export default function Tracker() {
         if (selectedEntryIds.length < 2) return
         mergeLogs(selectedEntryIds)
         setSelectedEntryIds([])
-        setLastSelectedId(null)
     }
 
     const handleDeleteSelected = () => {
         selectedEntryIds.forEach(id => deleteLog(id))
         setSelectedEntryIds([])
-        setLastSelectedId(null)
     }
 
     const handleDuplicateSelected = () => {
-        // Implement complex duplicate in Context if needed, for now just clear
+        if (selectedEntryIds.length === 0) return
+        const toDuplicate = logs.filter(l => selectedEntryIds.includes(l.id))
+        toDuplicate.forEach(log => {
+            const { id, ...rest } = log
+            addLog(rest)
+        })
         setSelectedEntryIds([])
-        setLastSelectedId(null)
     }
 
-    const handleRowClick = (e: React.MouseEvent, id: string) => {
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
-        const isCtrl = isMac ? e.metaKey : e.ctrlKey
 
-        if (e.shiftKey && lastSelectedId !== null) {
-            // Shift select: find range
-            const allIds = sortedDates.flatMap(dateStr => groupedEntries[dateStr].map(e => e.id))
-            const startIdx = allIds.indexOf(lastSelectedId)
-            const endIdx = allIds.indexOf(id)
-
-            if (startIdx !== -1 && endIdx !== -1) {
-                const minIdx = Math.min(startIdx, endIdx)
-                const maxIdx = Math.max(startIdx, endIdx)
-                const rangeIds = allIds.slice(minIdx, maxIdx + 1)
-
-                if (isCtrl) {
-                    // Add range to existing selection
-                    setSelectedEntryIds(prev => Array.from(new Set([...prev, ...rangeIds])))
-                } else {
-                    // Replace selection
-                    setSelectedEntryIds(rangeIds)
-                }
-            }
-        } else if (isCtrl) {
-            // Ctrl/Cmd select: toggle individual
-            setSelectedEntryIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
-            setLastSelectedId(id)
-        } else {
-            // Normal click: select single
-            setSelectedEntryIds([id])
-            setLastSelectedId(id)
-        }
-    }
 
     // Group entries by date
     const groupedEntries = logs.reduce((acc, entry) => {
@@ -97,23 +79,10 @@ export default function Tracker() {
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-4">
                         <h1 className="text-2xl font-semibold text-white">Time Tracker</h1>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#61afef] hover:bg-[#5294cc] text-[#282c34] font-medium text-sm transition-colors shadow-sm">
-                            <Plus size={16} />
-                            Log Time
-                        </button>
                     </div>
 
-                    {/* View Toggle & Filters */}
+                    {/* Filters */}
                     <div className="flex items-center gap-4">
-                        <select
-                            value={viewMode}
-                            onChange={(e) => setViewMode(e.target.value as any)}
-                            className="bg-[#282c33] border border-[#3a3f4b] text-[#abb2bf] text-sm rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#61afef]"
-                        >
-                            <option value="simple">Simple View</option>
-                            <option value="calendar">Calendar View</option>
-                        </select>
-
                         {!isFilterPinned && (
                             <FilterPanel
                                 isPinned={isFilterPinned}
@@ -141,74 +110,239 @@ export default function Tracker() {
                                     </span>
                                 </div>
 
-                                <div className="bg-[#282c33] border border-[#3a3f4b] rounded-md overflow-hidden shadow-sm">
-                                    {dayEntries.map((entry, idx) => (
-                                        <div
-                                            key={entry.id}
-                                            onClick={(e) => handleRowClick(e, entry.id)}
-                                            className={clsx(
-                                                "group flex items-center py-3 transition-colors hover:bg-[#2c313a] cursor-pointer",
-                                                idx !== dayEntries.length - 1 && "border-b border-[#3a3f4b]",
-                                                selectedEntryIds.includes(entry.id) ? "bg-[#2c313a] border-l-2 border-l-[#61afef]" : "border-l-2 border-l-transparent"
-                                            )}
-                                        >
-                                            {/* Thumbnail */}
-                                            <div className="w-16 h-10 shrink-0 rounded overflow-hidden bg-[#1e2227] border border-[#3a3f4b] ml-4">
-                                                {entry.thumbnail_url && <img src={entry.thumbnail_url} alt="" className="w-full h-full object-cover" />}
-                                            </div>
+                                <div className="bg-[#282c33] border border-[#3a3f4b] rounded-md shadow-sm">
+                                    {(() => {
+                                        const aggregatedGroups = new Map<string, typeof dayEntries>();
+                                        dayEntries.forEach(entry => {
+                                            const key = `${entry.project_id}|${entry.ftrack_path}|${entry.ftrack_task_name}`;
+                                            if (!aggregatedGroups.has(key)) aggregatedGroups.set(key, []);
+                                            aggregatedGroups.get(key)!.push(entry);
+                                        });
 
-                                            {/* Description */}
-                                            <div className="flex-1 min-w-0 px-4">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-white truncate font-medium">{entry.description || '(No description)'}</span>
-                                                </div>
-                                            </div>
+                                        const sortedGroups = Array.from(aggregatedGroups.values()).sort((groupA, groupB) => {
+                                            const latestStartA = groupA.map(e => e.start_time).filter(Boolean).sort().reverse()[0] || '';
+                                            const latestStartB = groupB.map(e => e.start_time).filter(Boolean).sort().reverse()[0] || '';
+                                            return latestStartB.localeCompare(latestStartA);
+                                        });
 
-                                            {/* Project, Path & Task Name */}
-                                            <div className="w-[340px] shrink-0 flex items-center gap-2">
-                                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.project_color }} />
-                                                <span className="text-sm truncate text-[#98c379] max-w-[100px]" title={entry.project_id}>{entry.project_id}</span>
-                                                <span className="text-[#5c6370] mx-0.5">•</span>
-                                                <span className="text-sm truncate text-[#5294cc] max-w-[100px]" title={entry.ftrack_path}>{entry.ftrack_path}</span>
-                                                <span className="text-[#5c6370] mx-0.5">•</span>
-                                                <span className="text-sm truncate text-[#abb2bf] flex-1" title={entry.ftrack_task_name}>{entry.ftrack_task_name}</span>
-                                            </div>
+                                        return sortedGroups.map((groupEntries, idx) => {
+                                            const entry = groupEntries[0];
+                                            const groupIds = groupEntries.map(e => e.id);
+                                            const isSelected = groupIds.some(id => selectedEntryIds.includes(id));
+                                            const totalDuration = groupEntries.reduce((acc, e) => acc + e.duration, 0);
 
-                                            {/* Bid Time */}
-                                            <div className="w-28 pl-4 flex items-center border-l border-[#3a3f4b]">
-                                                {entry.bid_time ? (
-                                                    <span className="text-xs text-[#5c6370]">Bid: <span className="text-[#abb2bf] font-mono">{formatDuration(entry.bid_time)}</span></span>
-                                                ) : (
-                                                    <span className="text-xs text-[#5c6370] italic">No bid</span>
-                                                )}
-                                            </div>
+                                            let earliestStart = '';
+                                            let latestEnd = '';
+                                            const starts = groupEntries.map(e => e.start_time).filter(Boolean).sort();
+                                            if (starts.length) earliestStart = starts[0];
+                                            const ends = groupEntries.map(e => e.end_time).filter(Boolean).sort().reverse();
+                                            if (ends.length) latestEnd = ends[0];
 
-                                            {/* Tags / Billable */}
-                                            <div className="w-24 pl-4 flex items-center justify-center border-l border-[#3a3f4b]">
-                                                {entry.billable && <span className="text-xs px-1.5 py-0.5 border border-[#98c379] text-[#98c379] rounded font-medium">$</span>}
-                                            </div>
+                                            const isEditable = groupEntries.some(e => e.status === 'logged' || e.status === 'disputed');
+                                            const displayStatus = isEditable ? 'logged' : entry.status;
+                                            const isActive = groupIds.includes(activeTimerId || '');
 
-                                            {/* Status, Time Range & Duration */}
-                                            <div className="w-64 flex items-center justify-end gap-3 pr-6">
-                                                {getStatusBadge(entry.status)}
-                                                {viewMode === 'calendar' && entry.start_time && entry.end_time && (
-                                                    <span className="text-xs text-[#5c6370] bg-[#1e2227] px-2 py-1 rounded border border-[#3a3f4b] font-mono">
-                                                        {entry.start_time} - {entry.end_time}
-                                                    </span>
-                                                )}
-                                                <span className="font-mono font-semibold text-[#e5c07b] text-lg pl-2 mr-4">{formatDuration(entry.duration)}</span>
-
-                                                {/* Resume button (Subdued but always visible) */}
-                                                <button
-                                                    className="p-1.5 text-[#5c6370] hover:text-[#98c379] rounded bg-[#1e2227] border border-[#3a3f4b] hover:bg-[#2c313a] transition-colors shadow-sm"
-                                                    title="Resume Task"
-                                                    onClick={(e) => { e.stopPropagation(); console.log('Resume', entry.id) }}
+                                            return (
+                                                <div
+                                                    key={entry.id}
+                                                    onClick={(e) => {
+                                                        const isCtrl = e.metaKey || e.ctrlKey;
+                                                        if (isCtrl) {
+                                                            setSelectedEntryIds(selectedEntryIds.includes(entry.id) ? selectedEntryIds.filter(i => !groupIds.includes(i)) : [...selectedEntryIds, ...groupIds]);
+                                                        } else {
+                                                            setSelectedEntryIds(groupIds);
+                                                        }
+                                                    }}
+                                                    className={clsx(
+                                                        "group flex items-center py-3 transition-colors hover:bg-[#2c313a] cursor-pointer",
+                                                        idx !== aggregatedGroups.size - 1 && "border-b border-[#3a3f4b]",
+                                                        isSelected ? "bg-[#2c313a] border-l-2 border-l-[#61afef]" : "border-l-2 border-l-transparent"
+                                                    )}
                                                 >
-                                                    <Play size={14} fill="currentColor" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                                    <div className="w-16 h-10 shrink-0 rounded overflow-hidden bg-[#1e2227] border border-[#3a3f4b] ml-4">
+                                                        {entry.thumbnail_url ? <img src={entry.thumbnail_url} alt="" className="w-full h-full object-cover" /> : null}
+                                                    </div>
+                                                    {/* Project, Path & Task Name (Immediately after thumbnail) */}
+                                                    <div
+                                                        className={clsx(
+                                                            "flex-1 min-w-[220px] shrink-0 pl-4 flex flex-col justify-center gap-0.5 relative",
+                                                            isEditable && "cursor-pointer group/path rounded hover:bg-[#323641] py-1.5 transition-colors"
+                                                        )}
+                                                        onClick={(e) => {
+                                                            if (isEditable) {
+                                                                e.stopPropagation();
+                                                                setEditingPathId(entry.id);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-1.5 text-xs font-medium pl-1">
+                                                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.project_color }} />
+                                                            <span className="truncate text-[#98c379] max-w-[120px]" title={projects.find(p => p.id === entry.project_id)?.name || entry.project_id}>
+                                                                {projects.find(p => p.id === entry.project_id)?.name || entry.project_id}
+                                                            </span>
+                                                            <span className="text-[#5c6370]">/</span>
+                                                            <span className="truncate text-[#5294cc] flex-1" title={entry.ftrack_path}>{entry.ftrack_path}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 pl-1 mt-0.5">
+                                                            <span className="text-white text-sm font-semibold truncate" title={entry.ftrack_task_name}>{entry.ftrack_task_name}</span>
+                                                            {entry.ftrack_task_type && (
+                                                                <span className="text-[9px] uppercase tracking-wider bg-[#1e2227] border border-[#3a3f4b] text-[#abb2bf] px-1 rounded-sm shadow-sm">{entry.ftrack_task_type}</span>
+                                                            )}
+                                                            {groupEntries.length > 1 && <span className="ml-1 text-[10px] bg-[#61afef] text-[#282c33] px-1.5 py-0.5 rounded-sm font-bold leading-none">{groupEntries.length}</span>}
+                                                        </div>
+
+                                                        {/* Edit Icon on Hover */}
+                                                        {isEditable && (
+                                                            <div className="hidden group-hover/path:flex items-center justify-center bg-[#61afef] text-[#282c33] rounded-sm px-1.5 py-0.5 ml-1 mr-1 text-[10px] font-bold uppercase tracking-wider shadow-sm absolute right-2 top-2">
+                                                                Edit Path
+                                                            </div>
+                                                        )}
+
+                                                        {/* Active Popover */}
+                                                        {editingPathId === entry.id && (
+                                                            <div
+                                                                className="absolute top-full left-0 mt-2 z-50 cursor-default"
+                                                                ref={pickerRef}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <PathPicker
+                                                                    onClose={() => setEditingPathId(null)}
+                                                                    onSelect={(node: FtrackNode, path: string[]) => {
+                                                                        const projectName = path.length > 0 ? path[0] : node.name;
+                                                                        const middlePath = path.length > 1 ? path.slice(1).join('/') : '...';
+
+                                                                        // Apply path changes to all items in group
+                                                                        groupIds.forEach(id => {
+                                                                            updateLog(id, {
+                                                                                project_id: projectName,
+                                                                                ftrack_path: middlePath,
+                                                                                ftrack_task_name: node.name,
+                                                                                ftrack_task_type: node.task_type || '',
+                                                                                thumbnail_url: node.thumbnail_url
+                                                                            });
+                                                                        });
+                                                                        setEditingPathId(null);
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Tags / Billable */}
+                                                    <div className="w-8 flex justify-center items-center border-l border-[#3a3f4b]">
+                                                        {isEditable ? (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    groupIds.forEach(id => updateLog(id, { billable: !entry.billable }));
+                                                                }}
+                                                                className={clsx(
+                                                                    "text-xs px-1.5 py-0.5 rounded font-medium transition-colors hover:bg-[#3a3f4b]",
+                                                                    entry.billable ? "text-[#98c379]" : "text-[#5c6370] opacity-50 hover:opacity-100"
+                                                                )}
+                                                                title="Toggle Billable"
+                                                            >
+                                                                $
+                                                            </button>
+                                                        ) : (
+                                                            entry.billable && <span className="text-xs px-1 py-0.5 text-[#98c379] rounded font-medium">$</span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Bid Time View */}
+                                                    <div className="w-40 pl-4 flex items-center border-l border-[#3a3f4b]">
+                                                        {(() => {
+                                                            if (!entry.bid_time) return <span className="text-xs text-[#5c6370] italic">No bid</span>;
+
+                                                            const relatedLogs = logs.filter(l => l.project_id === entry.project_id && l.ftrack_path === entry.ftrack_path && l.ftrack_task_name === entry.ftrack_task_name);
+                                                            const totalLoggedSecs = relatedLogs.reduce((acc, l) => acc + l.duration, 0);
+
+                                                            const bidSecs = entry.bid_time;
+                                                            const percentage = Math.min(100, Math.round((totalLoggedSecs / bidSecs) * 100));
+                                                            const isOver = totalLoggedSecs > bidSecs;
+
+                                                            const color = isOver ? '#e06c75' : '#98c379'; // Red for overbid, green for inside bid
+                                                            const remainingColor = '#3a3f4b';
+                                                            const bidHrs = bidSecs / 3600;
+
+                                                            return (
+                                                                <div className="flex items-center gap-2" title={`Total logged: ${formatDuration(totalLoggedSecs)} / Bid: ${formatDuration(bidSecs)}`}>
+                                                                    <div
+                                                                        className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                                                                        style={{
+                                                                            background: `conic-gradient(${color} ${percentage}%, ${remainingColor} ${percentage}%)`
+                                                                        }}
+                                                                    >
+                                                                        <div className="w-3.5 h-3.5 bg-[#1e2227] rounded-full group-hover:bg-[#2c313a] transition-colors" />
+                                                                    </div>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] text-[#5c6370] leading-none mb-0.5">Bid: {Math.round(bidHrs)}h</span>
+                                                                        <span className={clsx("text-[11px] font-mono leading-none", isOver ? "text-[#e06c75]" : "text-[#abb2bf]")}>
+                                                                            {percentage}%
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })()}
+                                                    </div>
+
+                                                    {/* Status, Time Range & Duration */}
+                                                    {/* Status, Time Range & Duration */}
+                                                    <div className="w-64 flex items-center justify-end gap-3 pr-6">
+                                                        <div className="w-24 flex justify-end">
+                                                            {isEditable ? (
+                                                                <button
+                                                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-[#61afef] text-[#282c33] hover:bg-[#5294cc] transition-colors shadow-sm uppercase tracking-wider"
+                                                                    onClick={(e) => { e.stopPropagation(); groupIds.forEach(id => updateLog(id, { status: 'submitted' })) }}
+                                                                >
+                                                                    Submit
+                                                                </button>
+                                                            ) : (
+                                                                getStatusBadge(displayStatus)
+                                                            )}
+                                                        </div>
+                                                        {earliestStart && latestEnd && (
+                                                            <div className="flex flex-col items-center bg-[#1e2227] px-1.5 py-0.5 rounded border border-[#3a3f4b]">
+                                                                <span className="text-[10px] leading-tight text-[#5c6370] font-mono whitespace-nowrap">{earliestStart}</span>
+                                                                <span className="text-[10px] leading-tight text-[#5c6370] font-mono whitespace-nowrap">{latestEnd}</span>
+                                                            </div>
+                                                        )}
+                                                        <span className="font-mono font-semibold text-[#e5c07b] text-lg pl-2 mr-2">{formatDuration(totalDuration)}</span>
+
+                                                        {/* Resume button */}
+                                                        {isEditable ? (
+                                                            <button
+                                                                className={clsx(
+                                                                    "p-1.5 rounded transition-colors shadow-sm",
+                                                                    isActive
+                                                                        ? "text-[#e06c75] bg-[#e06c75]/10 border border-[#e06c75]/30 hover:bg-[#e06c75]/20"
+                                                                        : "text-[#5c6370] bg-[#1e2227] border border-[#3a3f4b] hover:text-[#98c379] hover:bg-[#2c313a]"
+                                                                )}
+                                                                title={isActive ? "Stop Timer" : "Resume Task"}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    if (isActive) {
+                                                                        stopTimer()
+                                                                    } else {
+                                                                        startTimer(entry.id)
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {isActive ? <Square size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                                                            </button>
+                                                        ) : (
+                                                            <div
+                                                                className="p-1.5 text-[#3a3f4b] rounded bg-[#1e2227]/50 border border-[#3a3f4b]/50 cursor-not-allowed"
+                                                                title="Task is locked"
+                                                            >
+                                                                <Play size={14} fill="currentColor" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    })()}
                                 </div>
                             </div>
                         )
